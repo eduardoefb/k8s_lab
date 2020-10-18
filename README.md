@@ -6,5 +6,5 @@
 3 - Execute the playbook:
 
 ```bash
-ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i hosts 00_run_without_installer.yaml 
+ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i hosts 00_run_all.yaml 
 ```
