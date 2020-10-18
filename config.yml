@@ -15,12 +15,8 @@
   timezone: Brazil/East
   hypervisors:
     - name: hypervisor01
-      ip: 10.2.1.30 
+      ip: 10.2.1.30
       workdir: /srv/kube     
-    
-    - name: hypervisor02
-      ip: 10.2.1.31
-      workdir: /srv/kube
   
   net:
     domain: kubernetes
@@ -49,13 +45,13 @@
       cpus: 4
       disk:
         size: 40G
-      hypervisor: "{{hypervisors[1]}}"  
+      hypervisor: "{{hypervisors[0]}}"  
     worker:
       ram: 8192000
       cpus: 4
       disk:
         size: 40G
-      hypervisor: "{{hypervisors[1]}}"
+      hypervisor: "{{hypervisors[0]}}"
 
   nodes:
     master:

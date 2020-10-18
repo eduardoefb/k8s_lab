@@ -2,22 +2,22 @@
   roles:     
     - role: enviroment    
 
-- hosts: hypervisor02
+- hosts: hypervisor01
   user: root
   roles:     
     - role: clear
     
-- hosts: hypervisor02
+- hosts: hypervisor01
   user: root
   roles:     
     - role: networks
 
-- hosts: hypervisor02
+- hosts: hypervisor01
   user: root
   roles:     
     - role: nodes
 
-- hosts: hypervisor02
+- hosts: hypervisor01
   user: root
   roles:     
     - role: wait_for_installation
