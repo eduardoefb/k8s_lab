@@ -1,0 +1,13 @@
+- hosts: localhost
+  roles:     
+    - role: enviroment    
+
+- hosts: hypervisor01, hypervisor02
+  user: root
+  roles:     
+    - role: clear
+    
+- hosts: hypervisor01, hypervisor02
+  user: root
+  roles:     
+    - role: networks

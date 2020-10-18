@@ -1,0 +1,30 @@
+---
+  - include_vars: "{{ playbook_dir }}/config.yml"      
+  - include_vars: "main.yml"
+
+  - name: Destroy vm if exists
+    community.libvirt.virt:
+      command: destroy
+      name: "{{ item.name }}"
+    ignore_errors: yes
+    with_items:      
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"
+
+  - name: Undefine vm if exists
+    community.libvirt.virt:
+      command: undefine
+      name: "{{ item.name }}"
+    ignore_errors: yes  
+    with_items:      
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"
+
+  - name: Delete workdir
+    file:
+      path: "{{ item.hypervisor.workdir }}"
+      state: absent 
+    with_items:      
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"      
+

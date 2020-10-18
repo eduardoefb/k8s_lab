@@ -1,0 +1,255 @@
+- hosts: localhost
+  roles:     
+    - role: enviroment    
+
+- hosts: hypervisor02
+  user: root
+  roles:     
+    - role: clear
+    
+- hosts: hypervisor02
+  user: root
+  roles:     
+    - role: networks
+
+- hosts: hypervisor02
+  user: root
+  roles:     
+    - role: nodes
+
+- hosts: hypervisor02
+  user: root
+  roles:     
+    - role: wait_for_installation
+
+- hosts: master, worker
+  user: root
+  roles:     
+    - role: update_nodes
+
+
+# PCS Cluster definition:
+- hosts: master
+  user: root
+  roles:     
+    - role: pcs_cluster
+
+
+# Cluster definition
+-
+  hosts: localhost
+  tasks:
+  - name: Random password
+    shell:
+       openssl rand -hex 40
+    register: hapwd
+    
+  - name: Export var
+    add_host:
+      name: "haclusterpwd"
+      value: "{{ hapwd.stdout }}"
+  
+-
+  hosts: master
+  user: root
+  tasks:
+  
+  - name: Update hacluster password
+    shell:
+      echo {{ hostvars['haclusterpwd']['value'] }} | passwd --stdin hacluster
+  
+  - name: Destroy all clusters if exist
+    command: /usr/sbin/pcs cluster destroy all  
+
+-      
+  hosts: FIRST_MASTER
+  user: root
+  tasks:
+
+  - include_vars: "{{ playbook_dir }}/config.yml"      
+
+  - name: Define the hacluster part 1
+    command: /usr/sbin/pcs cluster auth {{ item.name }} -u hacluster -p "{{hostvars['haclusterpwd']['value']}}"
+    with_items:
+      "{{ nodes.master }}"
+
+  - name: Define the hacluster part 2
+    command: /usr/sbin/pcs cluster setup --name "{{ cluster.name }}" "{{ nodes.master[0].name }}" "{{ nodes.master[1].name }}" "{{ nodes.master[2].name }}"
+
+  - name: Start cluster
+    command: /usr/sbin/pcs cluster start --all
+  
+  - name: Enable cluster
+    command: /usr/sbin/pcs cluster enable --all
+
+  - name: Define the resource part 1
+    command: pcs property set stonith-enabled=false
+  
+  - name: Define the resource part 2
+    command: pcs property set no-quorum-policy=ignore
+  
+  - name: Define the resource part 3
+    command: pcs resource create {{ item.name }} ocf:heartbeat:IPaddr2 ip={{ item.ip }} cidr_netmask={{ net.netmask_len }} nic=eth0 op monitor interval=30s
+    with_items:
+      "{{ cluster.resources }}"
+  
+  - name: Stop clusters
+    command: pcs cluster stop --all
+  
+  - name: Start clusters
+    command: pcs cluster start --all
+  
+- 
+  # Install docker:
+  hosts: master, worker
+  user: root
+  roles:     
+    - role: docker
+
+- 
+  # Install kubernetes:
+  hosts: master, worker
+  user: root
+  roles:     
+    - role: kubernetes  
+
+# Configure kubernetes cluster
+
+- hosts: master, worker
+  user: root
+  tasks:
+    - name: Remove kubernetes configuration
+      shell:
+        kubeadm reset -f
+  
+# Restart 2nd and 3rd masters to force hip ip to migrate to 1st master
+- hosts: master02, master03
+  user: root 
+  tasks:
+  - name: Reboot 2nd and 3rd master nodes
+    reboot:
+      msg: Reboot
+      reboot_timeout: 360  
+
+- hosts: master01
+  user: root
+  tasks:
+    - include_vars: "{{ playbook_dir }}/config.yml" 
+  
+    - name: Create cluster
+      shell: kubeadm init --control-plane-endpoint "{{ cluster.resources[0].ip }}:6443" --upload-certs > /tmp/kube_init.log
+
+    - name: Configure kubeconfig part 1
+      file:
+        path: /root/.kube
+        state: absent
+
+    - name: Configure kubeconfig part 2
+      file:
+        path: /root/.kube
+        state: directory
+        mode: '700'
+    
+    - name: Configure kubeconfig part 3
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /root/.kube/config
+        remote_src: yes
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Get kube config
+      fetch:
+        src: /root/.kube/config
+        dest: kubeconfig
+        flat: yes
+    
+    - name: Install the Weave Net addon
+      shell: kubectl apply -f "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n')" 
+  
+    - name: Retrive configuration for other masters
+      shell: grep -A2 --color "kubeadm join" /tmp/kube_init.log | while read l; do echo $l; done | head -1
+      register: master_join_cmd
+
+    - name: Retrive configuration for other workers
+      shell: grep -A2 --color "kubeadm join" /tmp/kube_init.log | while read l; do echo $l; done | tail -1
+      register: worker_join_cmd
+
+    - name: Export master_join_cmd
+      add_host:
+        name: "master_join_cmd"
+        value: "{{ master_join_cmd.stdout}}"    
+
+    - name: Export worker_join_cmd
+      add_host:
+        name: "worker_join_cmd"
+        value: "{{ worker_join_cmd.stdout}}"    
+
+- 
+  hosts: master02, master03
+  user: root
+  tasks: 
+    - name: Configure 2nd and 3rd master nodes 
+      shell: "{{ hostvars['master_join_cmd']['value'] }}"
+
+    - name: Configure kubeconfig part 1
+      file:
+        path: /root/.kube
+        state: absent
+
+    - name: Configure kubeconfig part 2
+      file:
+        path: /root/.kube
+        state: directory
+        mode: '700'
+    
+    - name: Configure kubeconfig part 3
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /root/.kube/config
+        remote_src: yes
+        owner: root
+        group: root
+        mode: '0700'
+- 
+  hosts: worker
+  user: root
+  tasks: 
+    - name: Configure worker nodes
+      shell: "{{ hostvars['worker_join_cmd']['value'] }}"
+
+- hosts: master01
+  user: root
+  tasks:
+    - name: Configure metallb
+      shell: |
+        kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.9.3/manifests/namespace.yaml
+        kubectl create secret generic -n metallb-system memberlist --from-literal=secretkey="$(openssl rand -base64 128)"
+        kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.9.3/manifests/metallb.yaml
+
+    - name: Remove template file
+      file: 
+        path: /tmp/metallb.yml
+        state: absent 
+
+    - name: Define template for external ips
+      lineinfile: 
+        line: |
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            namespace: metallb-system
+            name: config
+          data:
+            config: |
+              address-pools:
+              - name: default
+                protocol: layer2
+                addresses:
+                - {{ metallb_ip_range }} 
+        path: /tmp/metallb.yml
+        create: yes
+
+    - name: Apply metalb config
+      shell: kubectl apply -f  /tmp/metallb.yml

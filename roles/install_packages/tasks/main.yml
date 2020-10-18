@@ -1,0 +1,11 @@
+---
+  
+  - include_vars: "{{ playbook_dir }}/config.yml"      
+  - include_vars: "main.yml"
+  
+
+  - name: Wait for nodes
+    
+    wait_for:
+      timeout: 7200
+      

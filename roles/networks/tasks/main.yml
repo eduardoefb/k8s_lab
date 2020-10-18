@@ -1,0 +1,38 @@
+---
+  - include_vars: "{{ playbook_dir }}/config.yml"      
+  - include_vars: "main.yml"      
+
+  - name: Deactivate networks
+    community.libvirt.virt_net:  
+      state: inactive
+      name: "{{ net.name }}"
+  
+
+  - name: Delete networks
+    community.libvirt.virt_net:
+      state: absent
+      name: "{{ net.name }}"
+    
+  - name: Define networks
+    community.libvirt.virt_net:
+      name: "{{ net.name }}"
+      command: define
+      xml: |
+        <network>
+          <name>{{ net.name }}</name>      
+          <bridge name='{{ net.name }}' stp='on' delay='0' />   
+        </network>
+    
+  - name: Start networks
+    community.libvirt.virt_net:
+      name: "{{ net.name }}"
+      command: start
+    
+  - name: Create interfaces
+    shell: |
+      ip link set "{{ net.external_interface }}" up
+      ip link del "{{ net.external_interface }}"."{{ net.external_vlan }}"
+      ip link add link "{{ net.external_interface }}" "{{ net.external_interface }}"."{{ net.external_vlan }}" type vlan id "{{ net.external_vlan }}"
+      ip link set "{{ net.external_interface }}"."{{ net.external_vlan }}" master "{{ net.name }}"
+      ip link set "{{ net.external_interface }}"."{{ net.external_vlan }}" up      
+

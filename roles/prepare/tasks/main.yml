@@ -1,0 +1,152 @@
+---
+# tasks file for prepare
+  - include_vars: "{{ playbook_dir }}/config.yml"      
+  - include_vars: "main.yml" 
+
+
+  - name: Update system
+    yum:
+      name: '*'
+      state: 'latest'
+
+  - name: check for reboot hint
+    shell: if [ $(rpm -q --last kernel | awk 'NR==1 {print $1}') != kernel-$(uname -r) ]; then echo 'reboot'; else echo 'Kernel is current'; fi
+    ignore_errors: true
+    register: reboot_hint
+
+  - name: Reboot after update  
+    reboot:
+      msg: Reboot triggered
+      reboot_timeout: 360
+    when: "reboot_hint.stdout == 'reboot'"      
+      
+  - name: Install required packages
+    yum: 
+      name: "{{ installer.packages }}"
+
+  - name: Create template
+    template:
+      src: dhcpd.j2
+      dest: /etc/dhcp/dhcpd.conf
+      mode: 0755
+  
+  - name: Create tftp service part 1
+    file:
+      path: /etc/xinetd.d/tftp
+      state: absent
+  
+  - name: Create tftp service part 2
+    lineinfile:
+      path: /etc/xinetd.d/tftp
+      create: yes
+      line: |
+        service tftp
+        {
+        socket_type = dgram
+        protocol    = udp
+        wait        = yes
+        user        = root
+        server      = /usr/sbin/in.tftpd
+        server_args = -s /var/lib/tftpboot
+        disable     = no
+        per_source  = 11
+        cps         = 100 2
+        flags       = IPv4
+        }
+
+  - name: Copy the files
+    copy:
+      src: "/usr/share/syslinux/{{ item }}"
+      dest: "/var/lib/tftpboot/{{ item }}"
+      remote_src: yes
+    with_items:
+      - pxelinux.0
+      - menu.c32
+      - memdisk
+      - mboot.c32
+      - chain.c32      
+
+  - name: Create directories
+    file:
+      path: "{{ item }}"
+      state: directory
+      mode: 755
+    with_items:
+      - /var/lib/tftpboot/pxelinux.cfg
+      - /var/lib/tftpboot/networkboot
+
+  - name: Copy files from ISO using shell
+    shell: |
+      mount -o loop /dev/sr0 /mnt/
+      cd /mnt/
+      \cp -av * /var/ftp/pub/
+      \cp -fv /mnt/images/pxeboot/vmlinuz /var/lib/tftpboot/networkboot/
+      \cp -fv /mnt/images/pxeboot/initrd.img /var/lib/tftpboot/networkboot/
+      cd ~
+      umount /mnt/
+    args:
+      warn: no
+  
+  - name: Kickstart template
+    template:
+      src: kickstart.j2
+      dest: "/var/ftp/pub/{{ item.name }}.cfg"
+    vars:
+      node_name: "{{ item.name }}"
+      ip_address: "{{ item.ip }}"
+    with_items:
+      - "{{nodes.master}}"
+      - "{{nodes.worker}}"
+        
+  - name: PXE Menu file
+    shell: |
+      cat << EOF > /var/lib/tftpboot/pxelinux.cfg/`gethostip -x {{ item.ip }}`
+      default menu.c32
+      prompt 0
+      timeout 30
+      MENU TITLE PXE Menu
+      LABEL centos7_x64
+      MENU LABEL CentOS 7_X64
+      KERNEL /networkboot/vmlinuz
+      APPEND initrd=/networkboot/initrd.img inst.repo=ftp://{{ installer.ip }}/pub ks=ftp://{{ installer.ip }}/pub/{{ item.name }}.cfg
+      EOF
+
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"
+
+  - name: Disable firwallld
+    systemd:
+      name: firewalld
+      state: stopped
+              
+  - name: Enable services
+    systemd:
+      name: "{{ item }}"
+      enabled: yes
+      masked: no
+    with_items:
+      - xinetd
+      - dhcpd.service
+      - vsftpd
+  
+  - name: Restart services
+    systemd:
+      name: "{{ item }}"
+      state: restarted
+      daemon_reload: yes
+    with_items:
+      - xinetd
+      - dhcpd.service
+      - vsftpd
+  
+  - name: Allow ftp for all directories
+    shell:
+      setsebool -P allow_ftpd_full_access 1
+
+
+
+      
+
+
+

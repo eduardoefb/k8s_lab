@@ -1,0 +1,72 @@
+---
+  - include_vars: "{{ playbook_dir }}/config.yml"      
+  - include_vars: "main.yml"
+
+  - name: Install packages for docker installation
+    yum:
+      name: "{{ packages }}"
+    vars:
+      packages:
+        - yum-utils
+        - device-mapper-persistent-data
+        - lvm2
+  
+  - name: Clear repository
+    file:
+      path: /etc/yum.repos.d/docker-ce.repo
+      state: absent
+
+  - name: Add repository
+    get_url:      
+      url: https://download.docker.com/linux/centos/docker-ce.repo
+      dest: /etc/yum.repos.d/docker-ce.repo
+        
+  - name: Refresh the repository
+    yum:
+      name: '*'
+      state: latest
+  
+  - name: Install docker packages
+    yum:
+      name: "{{ packages }}"
+    vars:
+      packages:
+        - containerd.io
+        - docker-ce
+        - docker-ce-cli
+  
+  - name: Create /etc/docker
+    file:
+      path: "{{ item }}"
+      state: directory
+      mode: '0755'
+    with_items:      
+        - /etc/systemd/system/docker.service.d
+        - /etc/docker
+  
+  - name: Set up the docker daemon
+    lineinfile:
+      path: /etc/docker/daemon.json
+      create: yes
+      line: |
+        {
+          "exec-opts": ["native.cgroupdriver=systemd"],
+          "log-driver": "json-file",
+          "log-opts": {
+            "max-size": "100m"
+          },
+          "storage-driver": "overlay2",
+          "storage-opts": [
+            "overlay2.override_kernel_check=true"
+          ]
+        }   
+  
+  - name: Start docker
+    systemd:
+      name: docker
+      state: started
+      enabled: yes
+      daemon_reload: yes 
+      
+     
+    

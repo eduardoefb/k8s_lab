@@ -1,0 +1,37 @@
+ddns-update-style interim;
+ignore client-updates;
+authoritative;
+allow booting;
+allow bootp;
+allow unknown-clients;
+
+subnet {{ net.network }} netmask {{ net.netmask }} {
+   range {{ net.dhcp.range }};
+   option domain-name-servers {{ net.dns }};
+   option domain-name "pxe.example.com";
+   option routers {{ net.gateway }};
+   option broadcast-address {{ net.broadcast }};
+   default-lease-time 600;
+   max-lease-time 7200;
+   # IP of PXE Server
+   next-server {{ installer.ip }};
+   filename "pxelinux.0";
+   
+   group {
+      {% for m in nodes.master %}
+host {{ m.name }} {
+         hardware ethernet       {{ m.mac }};
+         fixed-address           {{ m.ip }};
+      } 
+      
+      {% endfor %}   
+
+      {% for m in nodes.worker %}
+host {{ m.name }} {
+         hardware ethernet       {{ m.mac }};
+         fixed-address           {{ m.ip }};
+      } 
+
+      {% endfor %}  
+   }
+}

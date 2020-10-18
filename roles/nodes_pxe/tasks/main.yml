@@ -1,0 +1,80 @@
+---
+  - include_vars: "{{ playbook_dir }}/config.yml"      
+  - include_vars: "main.yml"
+  
+  - name: Destroy vms if exists
+    community.libvirt.virt:
+      command: destroy
+      name: "{{ item.name }}"
+    ignore_errors: yes
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"
+
+  - name: Undefine  vms if exists
+    community.libvirt.virt:
+      command: undefine
+      name: "{{ item.name }}"
+    ignore_errors: yes
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"
+
+  - name: Delete workdir 
+    file:
+      path: "{{ item.hypervisor.workdir }}"
+      state: absent
+      mode: "0755"
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"
+
+
+  - name: Create workdir 
+    file:
+      path: "{{ item.hypervisor.workdir }}"
+      state: directory
+      mode: "0755"
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"
+  
+  - name: Create disk file
+    shell:
+      "qemu-img create {{ item.hypervisor.workdir }}/{{ item.disk.name }} {{ item.disk.size }}"
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"
+
+  - name: Define nodes
+    community.libvirt.virt:
+      command: define
+      xml: "{{ lookup('template', 'virt.j2') }}"
+    vars:
+      vm_name: "{{ item.name }}"
+      ram: "{{ item.ram }}"
+      cpus: "{{ item.cpus }}"
+      dire: "{{ item.hypervisor.workdir }}"
+      qcow_file: "{{ item.disk.name }}"
+      mac_address:  "{{ item.mac }}"
+      net_name: "{{ net.name }}"
+      vnc_port: "{{ item.vnc.port }}"
+      vnc_ip: "{{ item.hypervisor.ip }}"
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"
+  
+  - name: Start nodes
+    community.libvirt.virt:
+      state: running
+      name: "{{ item.name }}"
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"
+          
+    
+
+
+
+
+  

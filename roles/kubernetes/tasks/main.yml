@@ -1,0 +1,50 @@
+---
+  - include_vars: "{{ playbook_dir }}/config.yml"      
+  - include_vars: "main.yml"
+
+  - name: Configure sysctl
+    lineinfile:
+      create: yes
+      path: /etc/sysctl.d/k8s.conf
+      line: |
+        net.bridge.bridge-nf-call-ip6tables = 1
+        net.bridge.bridge-nf-call-iptables = 1
+    
+  - name: Apply sysctl configuration
+    command: sysctl --system
+  
+  # Firewall for now is disabled, no actions for firewall
+
+  - name: Configure kubeadm, kubelet and kubectl repository
+    lineinfile:
+      path: /etc/yum.repos.d/kubernetes.repo
+      create: yes 
+      line: |
+        [kubernetes]
+        name=Kubernetes
+        baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-\$basearch
+        enabled=1
+        gpgcheck=1
+        repo_gpgcheck=1
+        gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+        exclude=kubelet kubeadm kubectl      
+
+  - name: Disable selinux
+    ansible.posix.selinux:
+      state: disabled
+
+  - name: Reboot 
+    reboot:
+      msg: Reboot triggered
+      reboot_timeout: 360
+
+  - name: Installing kubeadm, kubelet and kubectl
+    command: yum install -y kubelet kubeadm kubectl --disableexcludes=kubernetes
+    args:
+      warn: false
+  
+  - name: Enable kubelet service
+    command: systemctl enable --now kubelet
+  
+
+  

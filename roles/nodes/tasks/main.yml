@@ -1,0 +1,234 @@
+---
+  - include_vars: "{{ playbook_dir }}/config.yml"      
+  - include_vars: "main.yml"
+  
+  - name: Destroy vms if exists
+    community.libvirt.virt:
+      command: destroy
+      name: "{{ item.name }}"
+    ignore_errors: yes
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"
+
+  - name: Undefine  vms if exists
+    community.libvirt.virt:
+      command: undefine
+      name: "{{ item.name }}"
+    ignore_errors: yes
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"
+
+  - name: Delete workdir 
+    file:
+      path: "{{ item.hypervisor.workdir }}"
+      state: absent
+      mode: "0755"
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"
+
+
+  - name: Create workdir 
+    file:
+      path: "{{ item.hypervisor.workdir }}"
+      state: directory
+      mode: "0755"
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"
+  
+  - name: Create disk file
+    shell:
+      "qemu-img create {{ item.hypervisor.workdir }}/{{ item.disk.name }} {{ item.disk.size }}"
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"
+
+  
+###########################################
+  - name: Download image file
+    get_url:
+      url: "{{ iso_image.url }}"
+      dest: "/tmp/{{ iso_image.filename}}"
+      timeout: 72000
+  
+  - name: Create temp directory for custom iso
+    file:
+      path: "{{ item.hypervisor.workdir }}/{{ item.name }}-install"
+      state: directory
+      mode: '0755'
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"
+
+  - name: Mount iso image
+    shell: |
+      umount /mnt 2>/dev/null               
+      mount -o loop /tmp/{{ iso_image.filename }} /mnt/      
+      shopt -s dotglob
+    args:
+      warn: false
+  
+  - name: Copy files from image to customized directory
+    shell: cp -avRf /mnt/* {{ item.hypervisor.workdir }}/{{ item.name }}-install/
+    args:
+      warn: false
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"      
+
+  - name: Umount iso 
+    command: umount /mnt/
+    args:
+      warn: false
+      
+  - name: Create kickstart file
+    template:
+      src: kickstart.j2
+      dest: "{{ item.hypervisor.workdir }}/{{ item.name }}-install/ks.cfg"
+    vars:
+      ip_address: "{{ item.ip }}"
+      node_name: "{{ item.name }}"
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"     
+
+  - name: Customize auto vm install via shell part 2
+    shell: |      
+      sed -i 's/append\ initrd\=initrd.img/append initrd=initrd.img\ ks\=cdrom:\/ks.cfg/'  {{ item.hypervisor.workdir }}/{{ item.name }}-install/isolinux/isolinux.cfg
+      sed -i '/menu default/d'  {{ item.hypervisor.workdir }}/{{ item.name }}-install/isolinux/isolinux.cfg
+      sed -i '/menu label \^Install CentOS 7/a     menu default'  {{ item.hypervisor.workdir }}/{{ item.name }}-install/isolinux/isolinux.cfg
+      sed -i 's/timeout 600/timeout 5/g' {{ item.hypervisor.workdir }}/{{ item.name }}-install/isolinux/isolinux.cfg
+      cd {{ item.hypervisor.workdir }}/{{ item.name }}-install
+      mkisofs -J -T -o ../{{ item.name }}-ks.iso -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -R -m TRANS.TBL -graft-points -V "CentOS 7 x86_64" .
+      cd {{ item.hypervisor.workdir }}
+      isohybrid  {{ item.name }}-ks.iso      
+    args:
+      warn: false
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"        
+
+  - name: Modify iso privilegies
+    file:
+      path: "{{ item.hypervisor.workdir }}/{{ item.name }}-ks.iso"
+      state: file
+      mode: '0755'
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"    
+
+  - name: Delete temp package
+    file:
+      path: "{{ item.hypervisor.workdir }}/{{ item.name }}-install"
+      state: absent
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"         
+
+  - name: Delete image
+    file:
+      path: /tmp/{{ iso_image.filename }}
+      state: absent
+
+  - name: Define virtual machine with iso
+    community.libvirt.virt:
+      command: define
+      xml: "{{ lookup('template', 'virt_with_iso.j2') }}"
+    vars:
+      vm_name: "{{ item.name }}"
+      ram: "{{ item.ram }}"
+      cpus: "{{ item.cpus }}"
+      dire: "{{ item.hypervisor.workdir }}"
+      qcow_file: "{{ item.disk.name }}"
+      mac_address:  "{{ item.mac }}"
+      net_name: "{{ net.name }}"
+      vnc_port: "{{ item.vnc.port }}"
+      vnc_ip: "{{ item.hypervisor.ip }}"
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"  
+      
+  - name: Start vms
+    community.libvirt.virt:
+      state: running
+      name: "{{ item.name }}"
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"
+      
+
+  - name: Wait for installation
+    wait_for:
+      host: "{{ item.ip }}"
+      port: 22
+      timeout: 7200
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"
+      
+  - name: Destroy VMs 
+    community.libvirt.virt:
+      command: destroy
+      name: "{{ item.name }}"
+    ignore_errors: yes
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"
+
+  - name: Undefine  vms 
+    community.libvirt.virt:
+      command: undefine
+      name: "{{ item.name }}"
+    ignore_errors: yes
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"
+
+  - name: Delete custom images
+    file:
+      path: "{{ item.hypervisor.workdir }}/{{ item.name }}-ks.iso"
+      state: absent
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"      
+
+  - name: Define virtual machine without iso
+    community.libvirt.virt:
+      command: define
+      xml: "{{ lookup('template', 'virt.j2') }}"
+    vars:
+      vm_name: "{{ item.name }}"
+      ram: "{{ item.ram }}"
+      cpus: "{{ item.cpus }}"
+      dire: "{{ item.hypervisor.workdir }}"
+      qcow_file: "{{ item.disk.name }}"
+      mac_address:  "{{ item.mac }}"
+      net_name: "{{ net.name }}"
+      vnc_port: "{{ item.vnc.port }}"
+      vnc_ip: "{{ item.hypervisor.ip }}"
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"   
+  
+  - name: Start nodes
+    community.libvirt.virt:
+      state: running
+      name: "{{ item.name }}"
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"
+          
+  - name: Wait for nodes
+    wait_for:
+      host: "{{ item.ip }}"
+      port: 22
+      timeout: 7200
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"
+
+
+  

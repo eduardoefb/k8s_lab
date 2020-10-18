@@ -1,0 +1,27 @@
+---
+  - include_vars: "{{ playbook_dir }}/config.yml"      
+  - include_vars: "main.yml"
+
+  - name: Install cluster packages
+    yum:
+      name: "{{ packages }}"
+    vars:
+      packages:
+        - pcs
+        - corosync
+        - pacemaker
+  
+  - name: Enable cluster services
+    systemd:
+      name: "{{ item }}"      
+      enabled: yes
+      
+    with_items:
+      - pcsd
+      - corosync
+      - pacemaker
+  
+  - name: Start pcsd
+    systemd:
+      name: pcsd
+      state: started

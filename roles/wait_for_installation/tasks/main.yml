@@ -1,0 +1,13 @@
+---
+  - include_vars: "{{ playbook_dir }}/config.yml"      
+  - include_vars: "main.yml"
+
+  - name: Wait for port 22
+    wait_for:
+      host: "{{ item.ip }}"
+      port: 22
+      timeout: 7200
+    with_items:
+      - "{{ nodes.master }}"
+      - "{{ nodes.worker }}"
+

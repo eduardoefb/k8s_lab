@@ -1,0 +1,63 @@
+firewall --disabled
+install
+url --url="ftp://{{ installer.ip }}/pub/"
+rootpw --iscrypted {{ root_pw_hash }}
+auth useshadow passalgo=sha512
+firstboot disable
+keyboard us
+lang en_US
+selinux disabled
+logging level=info
+timezone {{ timezone }}
+bootloader location=mbr
+clearpart --all --initlabel
+ignoredisk --only-use="sda"
+part /boot --fstype ext4 --size=300
+part pv.01 --size=1 --grow
+volgroup root_vg01 pv.01
+logvol / --fstype ext4 --name=lv_01 --vgname=root_vg01 --size=1 --grow
+bootloader --location=mbr --append="net.ifnames=0 biosdevname=0"
+reboot
+%packages
+@^minimal
+@core
+%end
+%addon com_redhat_kdump --disable --reserve-mb='auto'
+%end
+%post
+mkdir -pv /root/.ssh
+chmod 700 /root/.ssh
+
+{% for k in authorized_keys %}
+    /bin/echo -e "{{ k }}" >> /root/.ssh/authorized_keys
+{% endfor %}
+
+cat << EOF > etc/sysconfig/network-scripts/ifcfg-eth0
+DEVICE=eth0
+ONBOOT=yes
+IPADDR={{ ip_address }}
+MTU=1500
+NETMASK={{ net.netmask }}
+GATEWAY={{ net.gateway }}
+EOF
+
+cat << EOF > /etc/resolv.conf
+nameserver {{ net.dns }}
+EOF
+
+echo "{{ node_name }}.{{ net.domain }}" > /etc/hostname
+
+
+echo "" >> /etc/hosts
+echo "# Cluster nodes:" >> /etc/hosts
+
+{% for n in nodes.master %}
+echo "{{ n.ip}}   {{ n.name }}" >> /etc/hosts
+{% endfor %}
+
+{% for n in nodes.worker %}
+echo "{{ n.ip}}   {{ n.name }}" >> /etc/hosts
+{% endfor %}
+
+
+%end
