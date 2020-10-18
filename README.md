@@ -6,5 +6,6 @@
 3 - Execute the playbook:
 
 ```bash
+ansible-galaxy collection install community.libvirt
 ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i hosts 00_run_all.yaml 
 ```
