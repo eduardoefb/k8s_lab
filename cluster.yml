@@ -1,0 +1,131 @@
+# PCS Cluster definition:
+- hosts: master, nfs
+  user: root
+  roles:     
+    - role: pcs_cluster
+
+# Cluster definition
+-
+  hosts: localhost
+  tasks:
+  - name: Random password
+    shell:
+       openssl rand -hex 40
+    register: k8shapwd
+    
+  - name: Export var
+    add_host:
+      name: "k8s_haclusterpwd"
+      value: "{{ k8shapwd.stdout }}"
+
+-
+  hosts: localhost
+  tasks:
+  - name: Random password
+    shell:
+       openssl rand -hex 40
+    register: nfshapwd
+    
+  - name: Export var
+    add_host:
+      name: "nfs_haclusterpwd"
+      value: "{{ nfshapwd.stdout }}"      
+  
+-
+  hosts: master
+  user: root
+  tasks:
+  
+  - name: Update hacluster password
+    shell:
+      echo {{ hostvars['k8s_haclusterpwd']['value'] }} | passwd --stdin hacluster
+  
+  - name: Destroy all clusters if exist
+    command: /usr/sbin/pcs cluster destroy all  
+  
+
+# K8S
+-      
+  hosts: FIRST_MASTER_K8S
+  user: root
+  tasks:
+
+  - include_vars: "{{ playbook_dir }}/config.yml"      
+
+  - name: Define the hacluster part 1
+    command: /usr/sbin/pcs cluster auth {{ item.name }} -u hacluster -p "{{hostvars['k8s_haclusterpwd']['value']}}"
+    with_items:
+      "{{ nodes.master }}"
+
+  - name: Define the hacluster part 2
+    command: /usr/sbin/pcs cluster setup --name "{{ cluster.resources[0].name }}" "{{ nodes.master[0].name }}" "{{ nodes.master[1].name }}" "{{ nodes.master[2].name }}"
+
+  - name: Start cluster
+    command: /usr/sbin/pcs cluster start --all
+  
+  - name: Enable cluster
+    command: /usr/sbin/pcs cluster enable --all
+
+  - name: Define the resource part 1
+    command: pcs property set stonith-enabled=false
+  
+  - name: Define the resource part 2
+    command: pcs property set no-quorum-policy=ignore
+  
+  - name: Define the resource part 3
+    command: pcs resource create {{ cluster.resources[0].name }} ocf:heartbeat:IPaddr2 ip={{ cluster.resources[0].ip }} cidr_netmask={{ net.netmask_len }} nic=eth0 op monitor interval=30s
+  
+  - name: Stop clusters
+    command: pcs cluster stop --all
+  
+  - name: Start clusters
+    command: pcs cluster start --all
+
+# NFS:
+-
+  hosts: nfs
+  user: root
+  tasks:
+  
+  - name: Update hacluster password
+    shell:
+      echo {{ hostvars['nfs_haclusterpwd']['value'] }} | passwd --stdin hacluster
+  
+  - name: Destroy all clusters if exist
+    command: /usr/sbin/pcs cluster destroy all    
+
+-      
+  hosts: FIRST_MASTER_NFS
+  user: root
+  tasks:
+
+  - include_vars: "{{ playbook_dir }}/config.yml"      
+
+  - name: Define the hacluster part 1
+    command: /usr/sbin/pcs cluster auth {{ item.name }} -u hacluster -p "{{hostvars['nfs_haclusterpwd']['value']}}"
+    with_items:
+      "{{ nodes.nfs }}"
+
+  - name: Define the hacluster part 2
+    command: /usr/sbin/pcs cluster setup --name "{{ cluster.resources[1].name }}" "{{ nodes.nfs[0].name }}" "{{ nodes.nfs[1].name }}" "{{ nodes.nfs[2].name }}"
+
+  - name: Start cluster
+    command: /usr/sbin/pcs cluster start --all
+  
+  - name: Enable cluster
+    command: /usr/sbin/pcs cluster enable --all
+
+  - name: Define the resource part 1
+    command: pcs property set stonith-enabled=false
+  
+  - name: Define the resource part 2
+    command: pcs property set no-quorum-policy=ignore
+  
+  - name: Define the resource part 3
+    command: pcs resource create {{ cluster.resources[1].name }} ocf:heartbeat:IPaddr2 ip={{ cluster.resources[1].ip }} cidr_netmask={{ net.netmask_len }} nic=eth0 op monitor interval=30s
+  
+  - name: Stop clusters
+    command: pcs cluster stop --all
+  
+  - name: Start clusters
+    command: pcs cluster start --all

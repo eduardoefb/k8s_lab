@@ -10,6 +10,7 @@
     with_items:      
       - "{{ nodes.master }}"
       - "{{ nodes.worker }}"
+      - "{{ nodes.nfs }}"
 
   - name: Undefine vm if exists
     community.libvirt.virt:
@@ -19,6 +20,7 @@
     with_items:      
       - "{{ nodes.master }}"
       - "{{ nodes.worker }}"
+      - "{{ nodes.nfs }}"
 
   - name: Delete workdir
     file:
@@ -27,4 +29,5 @@
     with_items:      
       - "{{ nodes.master }}"
       - "{{ nodes.worker }}"      
+      - "{{ nodes.nfs }}"
 

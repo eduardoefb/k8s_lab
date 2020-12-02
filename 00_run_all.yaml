@@ -1,32 +1,36 @@
+# Define the enviroment:
 - hosts: localhost
   roles:     
     - role: enviroment    
 
-- hosts: hypervisor01
+# Clear everything
+- hosts: hypervisor
   user: root
   roles:     
     - role: clear
-    
-- hosts: hypervisor01
+
+# Define networks:    
+- hosts: hypervisor
   user: root
   roles:     
     - role: networks
 
-- hosts: hypervisor01
+# Configure nodes and install:
+- hosts: hypervisor
   user: root
   roles:     
     - role: nodes
 
-- hosts: hypervisor01
+# Wait for installation
+- hosts: hypervisor
   user: root
   roles:     
     - role: wait_for_installation
 
-- hosts: master, worker
+- hosts: master, worker, nfs
   user: root
   roles:     
     - role: update_nodes
-
 
 # PCS Cluster definition:
 - hosts: master
@@ -34,20 +38,19 @@
   roles:     
     - role: pcs_cluster
 
-
-# Cluster definition
+# Cluster definition for k8s
 -
   hosts: localhost
   tasks:
   - name: Random password
     shell:
        openssl rand -hex 40
-    register: hapwd
+    register: k8shapwd
     
   - name: Export var
     add_host:
-      name: "haclusterpwd"
-      value: "{{ hapwd.stdout }}"
+      name: "k8s_haclusterpwd"
+      value: "{{ k8shapwd.stdout }}"
   
 -
   hosts: master
@@ -56,25 +59,27 @@
   
   - name: Update hacluster password
     shell:
-      echo {{ hostvars['haclusterpwd']['value'] }} | passwd --stdin hacluster
+      echo {{ hostvars['k8s_haclusterpwd']['value'] }} | passwd --stdin hacluster
   
   - name: Destroy all clusters if exist
     command: /usr/sbin/pcs cluster destroy all  
+  
 
+# K8S
 -      
-  hosts: FIRST_MASTER
+  hosts: FIRST_MASTER_K8S
   user: root
   tasks:
 
   - include_vars: "{{ playbook_dir }}/config.yml"      
 
   - name: Define the hacluster part 1
-    command: /usr/sbin/pcs cluster auth {{ item.name }} -u hacluster -p "{{hostvars['haclusterpwd']['value']}}"
+    command: /usr/sbin/pcs cluster auth {{ item.name }} -u hacluster -p "{{hostvars['k8s_haclusterpwd']['value']}}"
     with_items:
       "{{ nodes.master }}"
 
   - name: Define the hacluster part 2
-    command: /usr/sbin/pcs cluster setup --name "{{ cluster.name }}" "{{ nodes.master[0].name }}" "{{ nodes.master[1].name }}" "{{ nodes.master[2].name }}"
+    command: /usr/sbin/pcs cluster setup --name "{{ cluster.resources[0].name }}" "{{ nodes.master[0].name }}" "{{ nodes.master[1].name }}" "{{ nodes.master[2].name }}"
 
   - name: Start cluster
     command: /usr/sbin/pcs cluster start --all
@@ -89,16 +94,28 @@
     command: pcs property set no-quorum-policy=ignore
   
   - name: Define the resource part 3
-    command: pcs resource create {{ item.name }} ocf:heartbeat:IPaddr2 ip={{ item.ip }} cidr_netmask={{ net.netmask_len }} nic=eth0 op monitor interval=30s
-    with_items:
-      "{{ cluster.resources }}"
+    command: pcs resource create {{ cluster.resources[0].name }} ocf:heartbeat:IPaddr2 ip={{ cluster.resources[0].ip }} cidr_netmask={{ net.netmask_len }} nic=eth0 op monitor interval=30s
   
   - name: Stop clusters
     command: pcs cluster stop --all
   
   - name: Start clusters
     command: pcs cluster start --all
-  
+
+# Execute instalation of pacages in all nfs servers
+- hosts: nfs
+  user: root
+  roles:     
+    - role: nfs
+
+# Install nfs utils in all hosts:
+- hosts: master, worker, nfs
+  user: root 
+  tasks:
+    - name: Install nfs-utils
+      yum:
+        name: nfs-utils
+
 - 
   # Install docker:
   hosts: master, worker
@@ -114,7 +131,6 @@
     - role: kubernetes  
 
 # Configure kubernetes cluster
-
 - hosts: master, worker
   user: root
   tasks:

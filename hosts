@@ -1,5 +1,5 @@
-[hypervisor01]
-10.2.1.30
+[hypervisor]
+10.2.1.31
 
 [master]
 10.5.0.10
@@ -9,6 +9,9 @@
 10.5.0.20
 10.5.0.21
 10.5.0.22
+[nfs]
+10.5.0.30
+10.5.0.31
 [master01]
 10.5.0.10
 
@@ -18,8 +21,11 @@
 [master03]
 10.5.0.12
 
-[FIRST_MASTER]
+[FIRST_MASTER_K8S]
 10.5.0.10
+
+[FIRST_MASTER_NFS]
+10.5.0.30
 
 [OTHER_MASTERS]
 10.5.0.11
@@ -34,6 +40,6 @@
 [worker03]
 10.5.0.22
 
-[control_plane]
+[k8s_hip]
 10.5.0.15
 

@@ -10,4 +10,5 @@
     with_items:
       - "{{ nodes.master }}"
       - "{{ nodes.worker }}"
+      - "{{ nodes.nfs }}"
 

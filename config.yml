@@ -1,22 +1,26 @@
 ---
   
   
-  root_pw_hash: $6$n1Y3t/DI9gKzNvxM$wMX2hNYMHIr/YY/sAkoarfuBkhK.ZXMJkf9PWzsdWLBcZ1wfknCJVJBefp3S8vkCmX863ryS1xLni3KHF6CA1.
+  root_pw_hash: $6$7Jmi07EytqDS76OV$eSe9ksovFxyt9scJ3V8FagpU0QdC.lOPznG2DEcEZw62PAb96J40quQ0lgI1mIkN7RZUNRT.l8j9JzrAwjn/v/
+  # To generate a password hash:
+  # python3 -c 'import crypt; import os; print(crypt.crypt("system123", crypt.mksalt(crypt.METHOD_SHA512)))'
+
+
   authorized_keys: 
     - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC4tzrayU6ahMhmWuicy+oFfy//9oB+2EdbbmDfA0d+k3SpYjWVqho64/L+sQIAN0RGBJx42GkbKi8B6AriPw8omLOCk2WSYW3ymEC7n3l32M5T4cLr8LIYwoMOBZkMtRc3H62PrHgDoTJLhUOvT2ewj1SLl7iU5gQuInwPE6jWooIb8R6KMUl31qNpkafCVPz5ovw0iYbDamHQF6sq081Xl39px2345T8TofIAocyBUfCOstmAvPaD9lXIV3j9JmPhAy0oweXpxdPiQzBHXepLh/jrvHrV5ggl2iwmLgF3uzwYdFlQN6eCniBtBEcGqEacb6oP2KHfHer04WIbAMHZ eduardoefb@efb
     - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDEogQQvxuvrZQZY7mNRxWTQ2KM+BzggtaGbckhevJiOXHbN1TyJZNFXMHz3ZH2g913uXCD31hikSwhWQdGPDCIy8KRPdaDsa9zVhZJ5e/WQ9/g2OYaZDlL1ESQtJvCCubo7XDxHkOPxrjaIJrt8sAJRCBO3GIoY+Ush+tqG7KnGuj3Z9MkunaRmNKmaOrRQtxAhGW0na6mRltdpkdVvSrER1MIh4dipr6CAm79xcdqzq64qkYLPq31AQs8A4B8rIPcZipaxBFi5KARC9PvEJ4pkAvaGFnPmFY1v1FUGSsuF0hRZiqa/gUU1QGKvT2UlA1dvbU6gY2rohilMiDtQOaD eduardoefb@efb
   
+  # For now, first resource is for kubernet controller vip IP, and second, for nfs vip ip
   cluster:
-    name: mastercl
-    resources:    
-      - name: control_plane
-        ip: 10.5.0.15
+      resources:    
+        - name: k8s_hip
+          ip: 10.5.0.15
   
   timezone: Brazil/East
   hypervisors:
-    - name: hypervisor01
-      ip: 10.2.1.30
-      workdir: /srv/kube     
+    - name: hypervisor
+      ip: 10.2.1.31
+      workdir: /srv/k8s     
   
   net:
     domain: kubernetes
@@ -30,11 +34,21 @@
     netmask_len: 24
     dns: 8.8.8.8
 
+  private_key:
+    filename: ~/.ssh/id_rsa
+    
+  nfs:
+    path: /srv/k8s_volume        
+    allowed_networks:
+      - 10.5.0.0/24
+      - 10.2.1.32/32
+
+
+
   metallb_ip_range: 10.5.0.129-10.5.0.254
     
   iso_image:
-    #url: http://10.2.1.32/files/CentOS-7-x86_64-Minimal-2003.iso
-    url: http://ftp.unicamp.br/pub/centos/7/isos/x86_64/CentOS-7-x86_64-Minimal-2003.iso    
+    url: http://ftp.unicamp.br/pub/centos/7/isos/x86_64/CentOS-7-x86_64-Minimal-2009.iso
     filename: centos_7.iso
 
   common_config:
@@ -47,6 +61,12 @@
     worker:
       ram: 8192000
       cpus: 4
+      disk:
+        size: 40G
+      hypervisor: "{{hypervisors[0]}}"
+    nfs:
+      ram: 2048000
+      cpus: 2
       disk:
         size: 40G
       hypervisor: "{{hypervisors[0]}}"
@@ -128,4 +148,29 @@
         ip: "10.5.0.22"
         vnc: 
           port: 20006   
+
+    nfs:
+      - name: nfs01
+        hypervisor: "{{ common_config.nfs.hypervisor }}"
+        mac: 74:86:21:eb:21:a6
+        ram: "{{ common_config.nfs.ram }}"
+        cpus: "{{ common_config.nfs.cpus }}"
+        disk: 
+          name: nfs01.qcow2
+          size: "{{ common_config.nfs.disk.size }}"
+        ip: "10.5.0.30"
+        vnc: 
+          port: 20007  
+    
+      - name: nfs02
+        hypervisor: "{{ common_config.nfs.hypervisor }}"
+        mac: 74:86:21:eb:21:a7
+        ram: "{{ common_config.nfs.ram }}"
+        cpus: "{{ common_config.nfs.cpus }}"
+        disk: 
+          name: nfs02.qcow2
+          size: "{{ common_config.nfs.disk.size }}"
+        ip: "10.5.0.31"
+        vnc: 
+          port: 20008           
 

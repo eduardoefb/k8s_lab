@@ -47,6 +47,19 @@
     with_items:
       "{{ nodes.worker }}"
   
+
+  - name: Add nfs nodes to the hosts 1
+    lineinfile:
+      path: hosts
+      line: '[nfs]'
+
+  - name: Add nfs nodes to the hosts 2
+    lineinfile:
+      path: hosts
+      line: "{{ item.ip }}"
+    with_items:
+      "{{ nodes.nfs }}"
+
   - name: Add masters individually
     lineinfile:
       path: hosts
@@ -57,12 +70,19 @@
     with_items:
       "{{ nodes.master }}"
 
-  - name: Define first master
+  - name: Define first master k8s
     lineinfile:
       path: hosts
       line: |
-        [FIRST_MASTER]
+        [FIRST_MASTER_K8S]
         {{ nodes.master[0].ip }}
+
+  - name: Define first master nfs
+    lineinfile:
+      path: hosts
+      line: |
+        [FIRST_MASTER_NFS]
+        {{ nodes.nfs[0].ip }}
   
   - name: Define other master nodes
     lineinfile:

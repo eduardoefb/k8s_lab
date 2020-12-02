@@ -58,4 +58,8 @@ echo "{{ n.ip}}   {{ n.name }}" >> /etc/hosts
 echo "{{ n.ip}}   {{ n.name }}" >> /etc/hosts
 {% endfor %}
 
+{% for n in nodes.nfs %}
+echo "{{ n.ip}}   {{ n.name }}" >> /etc/hosts
+{% endfor %}
+
 %end

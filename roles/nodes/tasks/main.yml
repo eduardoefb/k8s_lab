@@ -10,6 +10,7 @@
     with_items:
       - "{{ nodes.master }}"
       - "{{ nodes.worker }}"
+      - "{{ nodes.nfs }}"
 
   - name: Undefine  vms if exists
     community.libvirt.virt:
@@ -19,6 +20,7 @@
     with_items:
       - "{{ nodes.master }}"
       - "{{ nodes.worker }}"
+      - "{{ nodes.nfs }}"
 
   - name: Delete workdir 
     file:
@@ -28,7 +30,7 @@
     with_items:
       - "{{ nodes.master }}"
       - "{{ nodes.worker }}"
-
+      - "{{ nodes.nfs }}"
 
   - name: Create workdir 
     file:
@@ -38,6 +40,7 @@
     with_items:
       - "{{ nodes.master }}"
       - "{{ nodes.worker }}"
+      - "{{ nodes.nfs }}"      
   
   - name: Create disk file
     shell:
@@ -45,6 +48,7 @@
     with_items:
       - "{{ nodes.master }}"
       - "{{ nodes.worker }}"
+      - "{{ nodes.nfs }}"      
 
   
 ###########################################
@@ -62,6 +66,7 @@
     with_items:
       - "{{ nodes.master }}"
       - "{{ nodes.worker }}"
+      - "{{ nodes.nfs }}"      
 
   - name: Mount iso image
     shell: |
@@ -78,6 +83,7 @@
     with_items:
       - "{{ nodes.master }}"
       - "{{ nodes.worker }}"      
+      - "{{ nodes.nfs }}"
 
   - name: Umount iso 
     command: umount /mnt/
@@ -93,7 +99,8 @@
       node_name: "{{ item.name }}"
     with_items:
       - "{{ nodes.master }}"
-      - "{{ nodes.worker }}"     
+      - "{{ nodes.worker }}"
+      - "{{ nodes.nfs }}"   
 
   - name: Customize auto vm install via shell part 2
     shell: |      
@@ -109,7 +116,8 @@
       warn: false
     with_items:
       - "{{ nodes.master }}"
-      - "{{ nodes.worker }}"        
+      - "{{ nodes.worker }}"
+      - "{{ nodes.nfs }}"       
 
   - name: Modify iso privilegies
     file:
@@ -119,6 +127,7 @@
     with_items:
       - "{{ nodes.master }}"
       - "{{ nodes.worker }}"    
+      - "{{ nodes.nfs }}"
 
   - name: Delete temp package
     file:
@@ -126,7 +135,8 @@
       state: absent
     with_items:
       - "{{ nodes.master }}"
-      - "{{ nodes.worker }}"         
+      - "{{ nodes.worker }}"   
+      - "{{ nodes.nfs }}"      
 
   - name: Delete image
     file:
@@ -150,6 +160,7 @@
     with_items:
       - "{{ nodes.master }}"
       - "{{ nodes.worker }}"  
+      - "{{ nodes.nfs }}"
       
   - name: Start vms
     community.libvirt.virt:
@@ -158,6 +169,7 @@
     with_items:
       - "{{ nodes.master }}"
       - "{{ nodes.worker }}"
+      - "{{ nodes.nfs }}"
       
 
   - name: Wait for installation
@@ -168,6 +180,7 @@
     with_items:
       - "{{ nodes.master }}"
       - "{{ nodes.worker }}"
+      - "{{ nodes.nfs }}"
       
   - name: Destroy VMs 
     community.libvirt.virt:
@@ -177,6 +190,7 @@
     with_items:
       - "{{ nodes.master }}"
       - "{{ nodes.worker }}"
+      - "{{ nodes.nfs }}"
 
   - name: Undefine  vms 
     community.libvirt.virt:
@@ -186,6 +200,7 @@
     with_items:
       - "{{ nodes.master }}"
       - "{{ nodes.worker }}"
+      - "{{ nodes.nfs }}"
 
   - name: Delete custom images
     file:
@@ -193,7 +208,8 @@
       state: absent
     with_items:
       - "{{ nodes.master }}"
-      - "{{ nodes.worker }}"      
+      - "{{ nodes.worker }}"   
+      - "{{ nodes.nfs }}"   
 
   - name: Define virtual machine without iso
     community.libvirt.virt:
@@ -212,6 +228,7 @@
     with_items:
       - "{{ nodes.master }}"
       - "{{ nodes.worker }}"   
+      - "{{ nodes.nfs }}"
   
   - name: Start nodes
     community.libvirt.virt:
@@ -220,6 +237,7 @@
     with_items:
       - "{{ nodes.master }}"
       - "{{ nodes.worker }}"
+      - "{{ nodes.nfs }}"
           
   - name: Wait for nodes
     wait_for:
@@ -229,6 +247,7 @@
     with_items:
       - "{{ nodes.master }}"
       - "{{ nodes.worker }}"
+      - "{{ nodes.nfs }}"
 
 
   

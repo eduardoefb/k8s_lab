@@ -1,0 +1,43 @@
+- hosts: localhost
+  tasks:
+    - include_vars: "{{ playbook_dir }}/config.yml"  
+    - name: Delete ssh_keys
+      file:
+        path: "{{ playbook_dir }}/{{ item.name }}_id_rsa"
+        state: absent
+      with_items:
+        "{{ nodes.nfs }}"
+    
+    - name: Create ssh_keys
+      shell: |
+        ssh-keygen -f {{ playbook_dir }}/{{ item.name }}_id_rsa -t rsa -q -N ""
+        chmod 400 {{ playbook_dir }}/{{ item.name }}_id_rsa
+      with_items:
+        "{{ nodes.nfs }}"
+
+    - name: Transfer key file to the node
+      shell: |
+        scp -o StrictHostKeyChecking=no -i {{ private_key.filename }}  {{ playbook_dir }}/{{ item.name }}_id_rsa root@{{ item.ip }}:~/.ssh/id_rsa
+        cat *_id_rsa.pub  | ssh -o StrictHostKeyChecking=no -i {{ private_key.filename }} root@{{ item.ip }} 'cat >> ~/.ssh/authorized_keys'
+      with_items:
+        "{{ nodes.nfs }}"        
+
+- hosts: nfs    
+  user: root
+  tasks:
+    - include_vars: "{{ playbook_dir }}/config.yml"
+    - name: Connect to nodes to populate the known-hosts
+      shell: |
+        ssh {{ item.ip }} -o StrictHostKeyChecking=no 'uname -n'
+        ssh {{ item.name }} -o StrictHostKeyChecking=no 'uname -n'
+      with_items:
+        "{{ nodes.nfs }}"        
+      
+
+- hosts: nfs
+  user: root
+  roles:     
+    - role: nfs
+
+     
+   

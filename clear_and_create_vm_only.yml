@@ -1,0 +1,33 @@
+# Define the enviroment:
+- hosts: localhost
+  roles:     
+    - role: enviroment    
+
+# Clear everything
+- hosts: hypervisor01
+  user: root
+  roles:     
+    - role: clear
+
+# Define networks:    
+- hosts: hypervisor01
+  user: root
+  roles:     
+    - role: networks
+
+# Configure nodes and install:
+- hosts: hypervisor01
+  user: root
+  roles:     
+    - role: nodes
+
+# Wait for installation
+- hosts: hypervisor01
+  user: root
+  roles:     
+    - role: wait_for_installation
+
+- hosts: master, worker, nfs
+  user: root
+  roles:     
+    - role: update_nodes
